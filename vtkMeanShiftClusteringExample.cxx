@@ -11,10 +11,8 @@
 
 #include "vtkMeanShiftClustering.h"
 
-
 int main(int, char *[])
 {
-  
   vtkSmartPointer<vtkPointSource> pointSource1 = 
     vtkSmartPointer<vtkPointSource>::New();
   pointSource1->SetCenter(0,0,0);
