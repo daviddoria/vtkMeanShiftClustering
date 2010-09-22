@@ -14,13 +14,10 @@ vtkStandardNewMacro(vtkMeanShiftClustering);
 
 vtkMeanShiftClustering::vtkMeanShiftClustering()
 {
-  this->Kernel = GAUSSIAN;
-  this->GaussianVariance = 1.0;
-  
-  this->WindowRadius = 1.0;
-  this->ConvergenceThreshold = 0.1;
-  this->MaxIterations = 100;
-  this->MinDistanceBetweenClusters = .1;
+    this->WindowRadius = 1.0;
+    this->ConvergenceThreshold = 0.1;
+    this->MaxIterations = 100;
+    this->MinDistanceBetweenClusters = .1;
 }
 
 int vtkMeanShiftClustering::RequestData(vtkInformation *vtkNotUsed(request),
@@ -47,9 +44,7 @@ int vtkMeanShiftClustering::RequestData(vtkInformation *vtkNotUsed(request),
  
   double currentCenter[3];
   double newCenter[3];
-  
-  //std::cout << "vtkMeanShiftClustering: There are " << input->GetNumberOfPoints() << " input points." << std::endl;
-  
+  std::cout << "vtkMeanShiftClustering: There are " << input->GetNumberOfPoints() << " input points." << std::endl;
   for(vtkIdType pointId = 0; pointId < input->GetNumberOfPoints(); pointId++)
     {
     double currentPoint[3];
@@ -79,19 +74,12 @@ int vtkMeanShiftClustering::RequestData(vtkInformation *vtkNotUsed(request),
 	
       // Compute the center of mass of the points inside the window
       double newCenter[3];
-      if(this->Kernel == UNIFORM)
-	{
-	ComputeUniformCenter(windowPoints, newCenter);
-	}
-      if(this->Kernel == GAUSSIAN)
-	{
-	ComputeGaussianCenter(windowPoints, newCenter, currentCenter);
-	}
+      CenterOfMass(windowPoints, newCenter);
 	
       vtkMath::Subtract(newCenter, currentCenter, difference);
       
       this->AssignBtoA(currentCenter, newCenter);
-	
+      
       iter++;
       }while((iter < this->MaxIterations) && (vtkMath::Norm(difference) > this->ConvergenceThreshold));
 
@@ -101,6 +89,7 @@ int vtkMeanShiftClustering::RequestData(vtkInformation *vtkNotUsed(request),
       if(this->ClusterCenters.size() == 0) 
 	{
 	this->ClusterCenters.push_back(centerVector);
+	this->ClusterId[pointId] = 0;
 	continue; //go to next input point
 	}
 	
@@ -112,6 +101,7 @@ int vtkMeanShiftClustering::RequestData(vtkInformation *vtkNotUsed(request),
 	  {
 	  //already found this cluster, stop looking.
 	  alreadyFound = true;
+	  this->ClusterId[pointId] = i;
 	  break;
 	  }
 	}
@@ -119,33 +109,11 @@ int vtkMeanShiftClustering::RequestData(vtkInformation *vtkNotUsed(request),
       if(!alreadyFound)
 	{
 	this->ClusterCenters.push_back(centerVector);
+	this->ClusterId[pointId] = this->ClusterCenters.size() - 1;
 	}
 	
       }// End loop over every point
       
-  // At this point, the clusers are determined. Now we need to assign each point to the nearest cluster.
-  vtkSmartPointer<vtkPoints> clusterCentersPoints = 
-    vtkSmartPointer<vtkPoints>::New();
-  for(unsigned int i = 0; i < this->ClusterCenters.size(); i++)
-    {
-    clusterCentersPoints->InsertNextPoint(this->ClusterCenters[i].GetData());
-    }
-  vtkSmartPointer<vtkPolyData> clusterCentersPolyData = 
-    vtkSmartPointer<vtkPolyData>::New();
-  clusterCentersPolyData->SetPoints(clusterCentersPoints);
-  
-  vtkSmartPointer<vtkKdTreePointLocator> clusterTree = 
-    vtkSmartPointer<vtkKdTreePointLocator>::New();
-  clusterTree->SetDataSet(clusterCentersPolyData);
-  clusterTree->BuildLocator();
-  for(vtkIdType pointId = 0; pointId < input->GetNumberOfPoints(); pointId++)
-    {
-    
-    vtkIdType closestCluster = clusterTree->FindClosestPoint(input->GetPoint(pointId));
-    
-    this->ClusterId[pointId] = closestCluster;
-    }
-
   // Create the color map
   vtkSmartPointer<vtkLookupTable> colorLookupTable = 
     vtkSmartPointer<vtkLookupTable>::New();
@@ -195,52 +163,26 @@ double vtkMeanShiftClustering::Distance(vtkVector3d avec, vtkVector3d bvec)
   return vtkMath::Distance2BetweenPoints(a,b);
 }
 
-void vtkMeanShiftClustering::ComputeUniformCenter(vtkPoints* points, double* center)
+void vtkMeanShiftClustering::CenterOfMass(vtkPoints* points, double* center)
 {
   center[0] = 0.0;
   center[1] = 0.0;
   center[2] = 0.0;
     
   for(vtkIdType i = 0; i < points->GetNumberOfPoints(); i++)
-    {
+  {
     double point[3];
     points->GetPoint(i, point);
     
     center[0] += point[0];
     center[1] += point[1];
     center[2] += point[2];
-    }
+  }
   
   double numberOfPoints = static_cast<double>(points->GetNumberOfPoints());
-  vtkMath::MultiplyScalar(center, 1.0/numberOfPoints);
-  
-}
-
-void vtkMeanShiftClustering::ComputeGaussianCenter(vtkPoints* points, double computedCenter[3], double inputCenter[3])
-{
-  computedCenter[0] = 0;
-  computedCenter[1] = 0;
-  computedCenter[2] = 0;
-    
-  for(vtkIdType i = 0; i < points->GetNumberOfPoints(); i++)
-    {
-    double point[3];
-    points->GetPoint(i, point);
-    
-    double n = exp(-vtkMath::Distance2BetweenPoints(point, inputCenter)/(2.0 * this->GaussianVariance));
-    
-    double v[3];
-    vtkMath::Subtract(point, inputCenter, v);
-  
-    computedCenter[0] += n * v[0];
-    computedCenter[1] += n * v[1];
-    computedCenter[2] += n * v[2];
-    }
-
-  double numberOfPoints = static_cast<double>(points->GetNumberOfPoints());
-  vtkMath::MultiplyScalar(computedCenter, 1.0/numberOfPoints);
-  
-  vtkMath::Add(inputCenter, computedCenter, computedCenter);
+  center[0] = center[0]/numberOfPoints;
+  center[1] = center[1]/numberOfPoints;
+  center[2] = center[2]/numberOfPoints;
 }
 
 void vtkMeanShiftClustering::AssignBtoA(double* a, double* b)

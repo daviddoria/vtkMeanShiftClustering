@@ -21,15 +21,23 @@ class vtkMeanShiftClustering : public vtkPolyDataAlgorithm
     vtkSetMacro(WindowRadius, double);
     vtkGetMacro(WindowRadius, double);
     
+    vtkSetMacro(GaussianVariance, double);
+    vtkGetMacro(GaussianVariance, double);
+   
+    enum KernelEnum {UNIFORM, GAUSSIAN};
+    
+    void SetKernelToGaussian(){this->Kernel = GAUSSIAN;}
+    void SetKernelToUniform(){this->Kernel = UNIFORM;}
+   
   protected:
     vtkMeanShiftClustering();
     ~vtkMeanShiftClustering(){}
     int RequestData(vtkInformation *, vtkInformationVector **, vtkInformationVector *);
     
+    int Kernel;
     
-    double kernel(double x);
-    
-    void CenterOfMass(vtkPoints* points, double* center);
+    void ComputeUniformCenter(vtkPoints* points, double* center);
+    void ComputeGaussianCenter(vtkPoints* points, double computedCenter[3], double inputCenter[3]);
     void AssignBtoA(double* a, double* b);
     
   private:
@@ -40,6 +48,7 @@ class vtkMeanShiftClustering : public vtkPolyDataAlgorithm
     double ConvergenceThreshold;
     unsigned int MaxIterations;
     double MinDistanceBetweenClusters;
+    double GaussianVariance;
     
     double Distance(vtkVector3d avec, vtkVector3d bvec);
 };
